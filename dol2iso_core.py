@@ -298,13 +298,40 @@ def _pad(data, size):
 # --------------------------------------------------------------------------- #
 # API principal
 # --------------------------------------------------------------------------- #
+def dol_declared_size(dol_bytes):
+    """Maior offset de arquivo que o header do .dol referencia.
+
+    Alguns .dol têm a cauda de zeros removida do arquivo: o header declara uma
+    seção que termina ALÉM do fim físico do arquivo. Carregado solto da SD o
+    Swiss lê o .dol num buffer zerado e a sobra cai em zeros — "funciona". Mas
+    na .iso o .dol fica gravado no tamanho exato (e o El-Torito arredonda em
+    setores de 512), então a cópia da seção corre para fora dos dados e o load
+    falha. Devolvemos o tamanho mínimo que o arquivo precisa ter para que toda
+    seção declarada seja legível (zero-preenchida quando faltar)."""
+    if len(dol_bytes) < 0xE4:
+        return len(dol_bytes)
+    text_off = struct.unpack(">7I", dol_bytes[0x00:0x1C])
+    data_off = struct.unpack(">11I", dol_bytes[0x1C:0x48])
+    text_sz  = struct.unpack(">7I", dol_bytes[0x90:0xAC])
+    data_sz  = struct.unpack(">11I", dol_bytes[0xAC:0xD8])
+    ext = len(dol_bytes)
+    for off, sz in list(zip(text_off, text_sz)) + list(zip(data_off, data_sz)):
+        if sz:
+            ext = max(ext, off + sz)
+    return ext
+
+
 def build_iso(dol_bytes, system_area, out_path):
     """Escreve a .iso bootável em out_path. system_area = gbi.hdr (32768 bytes)."""
     if len(system_area) != SYSTEM_AREA_SIZE:
         raise ValueError("system_area (gbi.hdr) must be 32768 bytes")
-    dol_size = len(dol_bytes)
-    if dol_size == 0:
+    if len(dol_bytes) == 0:
         raise ValueError(".dol is empty")
+    # repara .dol com a cauda truncada: completa até o extent declarado no header
+    declared = dol_declared_size(dol_bytes)
+    if declared > len(dol_bytes):
+        dol_bytes = bytes(dol_bytes) + b"\x00" * (declared - len(dol_bytes))
+    dol_size = len(dol_bytes)
 
     dol_sectors = math.ceil(dol_size / SECTOR)
     total_sectors = LBA_DOL + dol_sectors
