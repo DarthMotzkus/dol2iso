@@ -24,6 +24,7 @@ def resource(name):
 GBI_HDR = resource("gbi.hdr")
 DEFAULT_BANNER = resource("default_banner.png")
 APP_ICON = resource("dolphin.ico")
+APP_ICON_PNG = resource("ico.png")
 
 
 class App(ttk.Frame):
@@ -176,11 +177,14 @@ def run_cli(argv):
     ap.add_argument("--title")
     ap.add_argument("--subtitle")          # omitted = keep stock; "" = blank
     ap.add_argument("--stretch", action="store_true")
+    ap.add_argument("--game-id",           # omitted = auto (único por .dol)
+                    help="6-char disc ID (default: auto, unique per .dol)")
     a = ap.parse_args(argv)
     banner = a.banner or DEFAULT_BANNER
     title = a.title or os.path.splitext(os.path.basename(a.dol))[0]
     n = core.make_bootable_iso(a.dol, a.iso, GBI_HDR, banner_path=banner,
-                               stretch=a.stretch, title=title, subtitle=a.subtitle)
+                               stretch=a.stretch, title=title,
+                               subtitle=a.subtitle, game_id=a.game_id)
     print(f">> .iso created: {a.iso} ({n} bytes)")
     return 0
 
@@ -192,9 +196,15 @@ def main():
     root.title("DOL → ISO")
     root.minsize(560, 0)
     try:
-        root.iconbitmap(default=APP_ICON)        # window / title-bar icon
+        # High-res PNG via iconphoto -> Tk scales it cleanly for the title bar
+        # and taskbar, instead of iconbitmap grabbing the muddy 16x16 .ico frame.
+        root._app_icon = tk.PhotoImage(file=APP_ICON_PNG)
+        root.iconphoto(True, root._app_icon)
     except tk.TclError:
-        pass
+        try:
+            root.iconbitmap(default=APP_ICON)    # fallback: window / title-bar icon
+        except tk.TclError:
+            pass
     try:
         ttk.Style().theme_use("vista")
     except tk.TclError:

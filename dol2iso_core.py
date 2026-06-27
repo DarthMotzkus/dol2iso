@@ -23,6 +23,7 @@ Layout de setores (2048 bytes cada):
   22     Boot catalog
   23..   BOOT.DOL
 """
+import hashlib
 import math
 import struct
 
@@ -39,6 +40,29 @@ LBA_PT_M       = 20
 LBA_ROOT       = 21
 LBA_BOOTCAT    = 22
 LBA_DOL        = 23
+
+# --- disc header (GameCube) dentro do gbi.hdr (system area) -----------------
+# cubiboot (e a maioria dos loaders) usa o Game ID de 6 bytes em 0x00 como
+# CHAVE de cache do banner. Se duas .iso compartilham o mesmo Game ID, o loader
+# trata-as como o MESMO jogo e replica o banner de uma na outra. Por isso cada
+# .iso precisa de um Game ID único.
+GAMEID_OFF   = 0x00                                      # 6 bytes
+GAMEID_LEN   = 6
+INTNAME_OFF  = 0x20                                      # internal game name
+INTNAME_LEN  = 0x3E0                                     # até 0x400
+_ID36 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+
+def derive_game_id(seed_bytes, prefix=b"DL"):
+    """Game ID de 6 bytes determinístico a partir de um seed (ex.: o .dol).
+    Mesmo .dol -> mesmo ID (rebuild estável); .dol diferente -> ID diferente."""
+    h = int.from_bytes(hashlib.sha1(seed_bytes).digest()[:8], "big")
+    tail = bytearray()
+    for _ in range(GAMEID_LEN - len(prefix)):
+        h, r = divmod(h, len(_ID36))
+        tail.append(ord(_ID36[r]))
+    return bytes(prefix) + bytes(tail)
+
 
 # --- branding do banner dentro do gbi.hdr (system area) ---------------------
 BNR1_OFF      = 0x43C0
@@ -99,13 +123,25 @@ def image_to_banner(path, stretch=False):
 
 
 def brand_system_area(gbi_bytes, banner_path=None, stretch=False,
-                      title=None, subtitle=None):
-    """Devolve uma cópia do gbi.hdr (32768 bytes) com banner/títulos reescritos."""
+                      title=None, subtitle=None, game_id=None):
+    """Devolve uma cópia do gbi.hdr (32768 bytes) com banner/títulos reescritos.
+
+    game_id: 6 bytes para o Game ID do disco (chave de cache do banner no
+    cubiboot). None = mantém o ID do gbi.hdr stock (causa colisão entre .iso!)."""
     buf = bytearray(gbi_bytes)
     if len(buf) != SYSTEM_AREA_SIZE:
         raise ValueError(f"gbi.hdr must be {SYSTEM_AREA_SIZE} bytes, got {len(buf)}")
     if buf[BNR1_OFF:BNR1_OFF + 4] != b"BNR1":
         raise ValueError("BNR1 magic not at 0x43C0 — unexpected gbi.hdr")
+
+    if game_id is not None:
+        gid = bytes(game_id)[:GAMEID_LEN].ljust(GAMEID_LEN, b"\x00")
+        buf[GAMEID_OFF:GAMEID_OFF + GAMEID_LEN] = gid
+        # nome interno do jogo: ajuda o loader a diferenciar/rotular os discos
+        if title:
+            buf[INTNAME_OFF:INTNAME_OFF + INTNAME_LEN] = b"\x00" * INTNAME_LEN
+            enc = title.encode("ascii", "replace")[:INTNAME_LEN - 1]
+            buf[INTNAME_OFF:INTNAME_OFF + len(enc)] = enc
 
     if banner_path:
         buf[PIXELDATA_OFF:PIXELDATA_OFF + PIXELDATA_LEN] = \
@@ -283,11 +319,20 @@ def build_iso(dol_bytes, system_area, out_path):
 
 def make_bootable_iso(dol_path, out_path, gbi_path,
                       banner_path=None, stretch=False,
-                      title=None, subtitle=None):
-    """Conveniência: lê arquivos, aplica branding, gera a .iso. Retorna bytes escritos."""
+                      title=None, subtitle=None, game_id=None):
+    """Conveniência: lê arquivos, aplica branding, gera a .iso. Retorna bytes escritos.
+
+    game_id: None = gera automaticamente um ID único a partir do conteúdo do .dol
+    (cada jogo recebe um ID estável e distinto, evitando colisão de banner no
+    cubiboot). Passe 6 bytes/str para forçar um ID específico."""
     with open(dol_path, "rb") as f:
         dol_bytes = f.read()
     with open(gbi_path, "rb") as f:
         gbi_bytes = f.read()
-    system_area = brand_system_area(gbi_bytes, banner_path, stretch, title, subtitle)
+    if game_id is None:
+        game_id = derive_game_id(dol_bytes)
+    elif isinstance(game_id, str):
+        game_id = game_id.encode("ascii", "replace")
+    system_area = brand_system_area(gbi_bytes, banner_path, stretch,
+                                    title, subtitle, game_id=game_id)
     return build_iso(dol_bytes, system_area, out_path)
