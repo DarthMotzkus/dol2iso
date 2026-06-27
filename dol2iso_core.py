@@ -70,11 +70,17 @@ PIXELDATA_OFF = 0x43E0
 PIXELDATA_LEN = 96 * 32 * 2                              # 6144
 BANNER_W, BANNER_H = 96, 32
 DESC_OFF = 0x5BE0
+# BNR1 comment block (offsets relativos a DESC_OFF):
+#   0x00 (32)  nome curto do jogo      -> title
+#   0x20 (32)  fabricante curto        -> maker
+#   0x40 (64)  nome longo do jogo      -> title
+#   0x80 (64)  fabricante longo        -> maker
+#   0xC0 (128) descrição               -> subtitle
 DESC_FIELDS = [
     (0x00, 0x20, "title"),
-    (0x20, 0x20, "subtitle"),
+    (0x20, 0x20, "maker"),
     (0x40, 0x40, "title"),
-    (0x80, 0x40, "subtitle"),
+    (0x80, 0x40, "maker"),
     (0xC0, 0x80, "subtitle"),
 ]
 
@@ -123,7 +129,7 @@ def image_to_banner(path, stretch=False):
 
 
 def brand_system_area(gbi_bytes, banner_path=None, stretch=False,
-                      title=None, subtitle=None, game_id=None):
+                      title=None, subtitle=None, maker=None, game_id=None):
     """Devolve uma cópia do gbi.hdr (32768 bytes) com banner/títulos reescritos.
 
     game_id: 6 bytes para o Game ID do disco (chave de cache do banner no
@@ -150,7 +156,7 @@ def brand_system_area(gbi_bytes, banner_path=None, stretch=False,
     # None  -> não mexe no campo (mantém o texto do gbi.hdr stock)
     # ""    -> limpa o campo (deixa em branco)
     # texto -> grava o texto
-    vals = {"title": title, "subtitle": subtitle}
+    vals = {"title": title, "subtitle": subtitle, "maker": maker}
     for off, length, key in DESC_FIELDS:
         text = vals.get(key)
         if text is None:
@@ -319,7 +325,7 @@ def build_iso(dol_bytes, system_area, out_path):
 
 def make_bootable_iso(dol_path, out_path, gbi_path,
                       banner_path=None, stretch=False,
-                      title=None, subtitle=None, game_id=None):
+                      title=None, subtitle=None, maker=None, game_id=None):
     """Conveniência: lê arquivos, aplica branding, gera a .iso. Retorna bytes escritos.
 
     game_id: None = gera automaticamente um ID único a partir do conteúdo do .dol
@@ -334,5 +340,5 @@ def make_bootable_iso(dol_path, out_path, gbi_path,
     elif isinstance(game_id, str):
         game_id = game_id.encode("ascii", "replace")
     system_area = brand_system_area(gbi_bytes, banner_path, stretch,
-                                    title, subtitle, game_id=game_id)
+                                    title, subtitle, maker=maker, game_id=game_id)
     return build_iso(dol_bytes, system_area, out_path)

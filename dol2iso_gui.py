@@ -40,6 +40,7 @@ class App(ttk.Frame):
         self.out = tk.StringVar()
         self.title = tk.StringVar()
         self.subtitle = tk.StringVar(value="Games Loader")
+        self.maker = tk.StringVar()
         self.stretch = tk.BooleanVar(value=False)
         self.status = tk.StringVar(value="Ready.")
 
@@ -70,6 +71,11 @@ class App(ttk.Frame):
         ttk.Entry(self, textvariable=self.subtitle).grid(row=r, column=1,
                                                          columnspan=2, sticky="ew",
                                                          pady=3)
+        r += 1
+        ttk.Label(self, text="Maker:").grid(row=r, column=0, sticky="w", pady=3)
+        ttk.Entry(self, textvariable=self.maker).grid(row=r, column=1,
+                                                      columnspan=2, sticky="ew",
+                                                      pady=3)
 
         r += 1
         self.btn = ttk.Button(self, text="Generate .iso", command=self._generate)
@@ -143,7 +149,8 @@ class App(ttk.Frame):
                 dol, out, GBI_HDR,
                 banner_path=banner, stretch=self.stretch.get(),
                 title=self.title.get().strip(),
-                subtitle=self.subtitle.get().strip())
+                subtitle=self.subtitle.get().strip(),
+                maker=self.maker.get().strip())
             self.after(0, self._done, out, n, None)
         except Exception as e:                                   # noqa: BLE001
             self.after(0, self._done, out, 0, e)
@@ -162,7 +169,7 @@ class App(ttk.Frame):
 
 def run_cli(argv):
     """CLI mode (when the .exe is called with arguments). Handy for scripts and tests.
-       Usage: dol2iso <input.dol> <output.iso> [banner] [--title T] [--subtitle S] [--stretch]"""
+       Usage: dol2iso <input.dol> <output.iso> [banner] [--title T] [--subtitle S] [--maker M] [--stretch]"""
     import argparse
     import io
     if sys.stdout is None:                       # --windowed build has no console
@@ -176,6 +183,7 @@ def run_cli(argv):
     ap.add_argument("banner", nargs="?", help="banner image (default: tool's banner)")
     ap.add_argument("--title")
     ap.add_argument("--subtitle")          # omitted = keep stock; "" = blank
+    ap.add_argument("--maker")             # omitted = keep stock; "" = blank
     ap.add_argument("--stretch", action="store_true")
     ap.add_argument("--game-id",           # omitted = auto (único por .dol)
                     help="6-char disc ID (default: auto, unique per .dol)")
@@ -184,7 +192,8 @@ def run_cli(argv):
     title = a.title or os.path.splitext(os.path.basename(a.dol))[0]
     n = core.make_bootable_iso(a.dol, a.iso, GBI_HDR, banner_path=banner,
                                stretch=a.stretch, title=title,
-                               subtitle=a.subtitle, game_id=a.game_id)
+                               subtitle=a.subtitle, maker=a.maker,
+                               game_id=a.game_id)
     print(f">> .iso created: {a.iso} ({n} bytes)")
     return 0
 

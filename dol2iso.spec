@@ -9,7 +9,7 @@ a = Analysis(
     ['dol2iso_gui.py'],
     pathex=[],
     binaries=[],
-    datas=[('assets\\gbi.hdr', 'assets'), ('assets\\default_banner.png', 'assets'), ('assets\\dolphin.ico', 'assets')],
+    datas=[('assets\\gbi.hdr', 'assets'), ('assets\\default_banner.png', 'assets'), ('assets\\dolphin.ico', 'assets'), ('assets\\ico.png', 'assets')],
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},

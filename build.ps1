@@ -8,6 +8,7 @@ py -m PyInstaller --noconfirm --onefile --windowed --name dol2iso `
     --add-data "assets\gbi.hdr;assets" `
     --add-data "assets\default_banner.png;assets" `
     --add-data "assets\dolphin.ico;assets" `
+    --add-data "assets\ico.png;assets" `
     --collect-submodules PIL `
     dol2iso_gui.py
 
